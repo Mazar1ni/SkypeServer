@@ -62,7 +62,6 @@ SOURCES += \
     rooms.cpp \
     room.cpp \
     tcpsocket.cpp \
-    sox.cpp \
 
 HEADERS += \
         widget.h \
@@ -70,7 +69,6 @@ HEADERS += \
     rooms.h \
     room.h \
     tcpsocket.h \
-    sox.h \
 
 SUBDIRS += \
     SkypeServer.pro

@@ -4,7 +4,6 @@
 #include "room.h"
 #include "tcpsocket.h"
 #include <QFile>
-#include "sox.h"
 #include <QDate>
 
 using namespace std;
@@ -26,18 +25,10 @@ void SocketThread::run()
     Socket = new TcpSocket;
     Socket->setSocketDescriptor(SocketDescriptor);
 
-    myProcess = new Sox(this);
-    myProcess->moveToThread(&thread);
-    thread.start();
-
-    connect(this, SIGNAL(noiseRemove()), myProcess, SLOT(removeNoise()));
-    connect(myProcess, SIGNAL(sendSound()), this, SLOT(sendSound()));
-
     connect(Socket, SIGNAL(readyRead()), this, SLOT(OnReadyRead()), Qt::DirectConnection);
     connect(Socket, SIGNAL(disconnected()), this, SLOT(OnDisconnected()), Qt::DirectConnection);
 
     exec();
-
 }
 
 void SocketThread::Authentication(QString login, QString pass)
@@ -150,67 +141,6 @@ void SocketThread::GetInRoom(QString name, QString pass)
     }
 }
 
-//float lopass(float input, float cutoff) {
-// lo_pass_output= outputs[0]+ (cutoff*(input-outputs[0]));
-//outputs[0]= lo_pass_output;
-//return(lo_pass_output);
-//}
-
-//float hipass(float input, float cutoff) {
-// hi_pass_output=input-(outputs[0] + cutoff*(input-outputs[0]));
-// outputs[0]=hi_pass_output;
-// return(hi_pass_output);
-//}
-
-void SocketThread::writingToFile(QByteArray buffer)
-{
-    QFile destinationFile;
-    destinationFile.setFileName(".//sox/files/test.raw");
-    destinationFile.open( QIODevice::WriteOnly);
-
-    destinationFile.write(buffer);
-    destinationFile.close();
-//    float input[buffer.size()];
-//    for(int i = 0; i < buffer.size(); i++)
-//    {
-//        input[i] = buffer[i];
-//    }
-
-//    QString n = "/18/";
-//    QByteArray buff = n.toUtf8();
-//    QByteArray bufff;
-//    for(int i = 0; i < buffer.size(); i++)
-//    {
-//        bufff[i] = input[i];
-//    }
-//    buff += bufff;
-//    room->SendAudioToAllClients(Socket, buff);
-
-    removeNoise();
-}
-
-void SocketThread::removeNoise()
-{
-    emit(noiseRemove());
-    //QMetaObject::invokeMethod(myProcess, "removeNoise", Qt::AutoConnection);
-}
-
-void SocketThread::sendSound()
-{
-    QFile destinationFile;
-    destinationFile.setFileName(".//sox/files/clear.raw");
-    destinationFile.open( QIODevice::ReadOnly);
-
-    QString n = "/18/";
-    QByteArray buff = n.toUtf8();
-
-    buff += destinationFile.readAll();
-
-    room->SendAudioToAllClients(Socket, buff);
-
-    destinationFile.close();
-}
-
 void SocketThread::checkId(QString testId, QString nameRoom, QString passRoom)
 {
     if(id == testId)
@@ -255,9 +185,7 @@ void SocketThread::OnReadyRead()
     // отправка всем пользователям комнаты аудио
     if(buffer.indexOf("/18/") != -1)
     {
-        //buffer.remove(0, 4);
         room->SendAudioToAllClients(Socket, buffer);
-        //writingToFile(buffer);
     }
 
     // проверка, относится ли этот текст в авторизации
@@ -349,7 +277,9 @@ void SocketThread::OnReadyRead()
         // удаление идентификатора
         str.remove(0, 16);
 
-        sendHistoryMessage(str);
+        int pos = str.indexOf("!");
+
+        sendHistoryMessage(str.left(pos), str.mid(pos + 1));
     }
 
     // проверка, относится ли этот текст к отправке сообщения другу
@@ -364,44 +294,82 @@ void SocketThread::OnReadyRead()
         QTime time = QTime::currentTime();
 
         QSqlQuery query = QSqlQuery(DataBase);
-        query.prepare("INSERT INTO messages (idFirstFriends, idSecoundFriends, message, time) "
-                      "VALUES (:idFirstFriends, :idSecoundFriends, :message, :time)");
+        query.prepare("INSERT INTO messages (idFirstFriends, idSecoundFriends, message, time, status) "
+                      "VALUES (:idFirstFriends, :idSecoundFriends, :message, :time, :status)");
         query.bindValue(":idFirstFriends", id);
         query.bindValue(":idSecoundFriends", str.left(pos));
         query.bindValue(":message", str.mid(pos+1));
-        query.bindValue(":time", date.toString("dddd MMMM dd yyyy") + " " + time.toString("hh:mm"));
+        query.bindValue(":time", date.toString("dd MMMM yyyy") + "!" + time.toString("hh:mm"));
+        query.bindValue(":status", "1");
         query.exec();
 
-//        query.prepare("SELECT idFirstFriends, idSecoundFriends FROM friends WHERE idFirstFriends = :first "
-//                      "OR idSecoundFriends = :secound");
-//        query.bindValue(":first", id);
-//        query.bindValue(":secound", id);
-//        query.exec();
+        QString idMessage = query.lastInsertId().toString();
 
-//        while(query.next())
-//        {
-            for(int i = 0; i < socketClients->size(); i++)
+        {
+            query.prepare("SELECT idFirstFriends, idSecoundFriends, "
+                          "unreadMessageFirstFriend, unreadMessageSecoundFriend "
+                          "FROM friends "
+                          "WHERE (idFirstFriends = :firstFriend "
+                          "AND idSecoundFriends = :first) "
+                          "OR (idFirstFriends = :first "
+                          "AND idSecoundFriends = :firstFriend)");
+            query.bindValue(":firstFriend", str.left(pos));
+            query.bindValue(":first", id);
+            query.exec();
+
+            int firstUnread;
+            int secoundUnread;
+
+            query.next();
+
+            firstUnread = query.value(2).toInt();
+            secoundUnread = query.value(3).toInt();
+
+            query.value(0).toString() == str.left(pos) ? firstUnread++ : secoundUnread++;
+
+            query.prepare("UPDATE friends SET unreadMessageFirstFriend = :firstUnread, "
+                          "unreadMessageSecoundFriend = :secoundUnread "
+                          "WHERE (idFirstFriends = :firstFriend "
+                          "AND idSecoundFriends = :first) "
+                          "OR (idFirstFriends = :first "
+                          "AND idSecoundFriends = :firstFriend)");
+            query.bindValue(":firstUnread", firstUnread);
+            query.bindValue(":secoundUnread", secoundUnread);
+            query.bindValue(":firstFriend", str.left(pos));
+            query.bindValue(":first", id);
+            query.exec();
+        }
+
+        for(int i = 0; i < socketClients->size(); i++)
+        {
+            if(socketClients->at(i) != this)
             {
-                if(socketClients->at(i) != this)
-                {
-                    QMetaObject::invokeMethod(socketClients->at(i), "checkIdForSendMessage", Qt::AutoConnection,
-                                          Q_ARG(QString, str.left(pos)),
-                                          Q_ARG(QString, date.toString("dddd MMMM dd yyyy")
-                                                + " " + time.toString("hh:mm") + "!" + str),
-                                          Q_ARG(QString, id));
-                }
+                QMetaObject::invokeMethod(socketClients->at(i), "checkIdForSendMessage", Qt::AutoConnection,
+                                      Q_ARG(QString, str.left(pos)),
+                                      Q_ARG(QString, date.toString("dd MMMM yyyy")
+                                            + "!" + time.toString("hh:mm") + "!" + str + "!" + "1"),
+                                      Q_ARG(QString, id + "!" + idMessage));
             }
-            checkIdForSendMessage(id, date.toString("dddd MMMM dd yyyy")
-                             + " " + time.toString("hh:mm") + "!" + str, id);
-//        }
+        }
+        checkIdForSendMessage(id, date.toString("dd MMMM yyyy")
+                         + "!" + time.toString("hh:mm") + "!" + str, id + "!" + idMessage);
     }
 
-    if(str.indexOf("/readAllMessages/") != -1)
+    if(str.indexOf("/readUnreadMessages/") != -1)
     {
-        str.remove(0, 17);
+        str.remove(0, 20);
 
-        // P.S. str - это id друга
+        int pos = str.indexOf("!");
+
+        QString idMessage = str.left(pos);
+        QString idFriend = str.mid(pos+1);
+
         QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("UPDATE messages SET status = 0 "
+                      "WHERE id = :idMessage");
+        query.bindValue(":idMessage", idMessage);
+        query.exec();
+
         query.prepare("SELECT idFirstFriends, idSecoundFriends, "
                       "unreadMessageFirstFriend, unreadMessageSecoundFriend "
                       "FROM friends "
@@ -409,7 +377,7 @@ void SocketThread::OnReadyRead()
                       "AND idSecoundFriends = :first) "
                       "OR (idFirstFriends = :first "
                       "AND idSecoundFriends = :firstFriend)");
-        query.bindValue(":firstFriend", str);
+        query.bindValue(":firstFriend", idFriend);
         query.bindValue(":first", id);
         query.exec();
 
@@ -421,7 +389,7 @@ void SocketThread::OnReadyRead()
         firstUnread = query.value(2).toInt();
         secoundUnread = query.value(3).toInt();
 
-        query.value(0).toString() == id ? firstUnread = 0 : secoundUnread = 0;
+        query.value(0).toString() == id ? firstUnread-- : secoundUnread--;
 
         query.prepare("UPDATE friends SET unreadMessageFirstFriend = :firstUnread, "
                       "unreadMessageSecoundFriend = :secoundUnread "
@@ -431,47 +399,7 @@ void SocketThread::OnReadyRead()
                       "AND idSecoundFriends = :firstFriend)");
         query.bindValue(":firstUnread", firstUnread);
         query.bindValue(":secoundUnread", secoundUnread);
-        query.bindValue(":firstFriend", str);
-        query.bindValue(":first", id);
-        query.exec();
-    }
-
-    if(str.indexOf("/UnreadMessage/") != -1)
-    {
-        str.remove(0, 15);
-
-        // P.S. str - это id друга
-        QSqlQuery query = QSqlQuery(DataBase);
-        query.prepare("SELECT idFirstFriends, idSecoundFriends, "
-                      "unreadMessageFirstFriend, unreadMessageSecoundFriend "
-                      "FROM friends "
-                      "WHERE (idFirstFriends = :firstFriend "
-                      "AND idSecoundFriends = :first) "
-                      "OR (idFirstFriends = :first "
-                      "AND idSecoundFriends = :firstFriend)");
-        query.bindValue(":firstFriend", str);
-        query.bindValue(":first", id);
-        query.exec();
-
-        int firstUnread;
-        int secoundUnread;
-
-        query.next();
-
-        firstUnread = query.value(2).toInt();
-        secoundUnread = query.value(3).toInt();
-
-        query.value(0).toString() == str ? firstUnread++ : secoundUnread++;
-
-        query.prepare("UPDATE friends SET unreadMessageFirstFriend = :firstUnread, "
-                      "unreadMessageSecoundFriend = :secoundUnread "
-                      "WHERE (idFirstFriends = :firstFriend "
-                      "AND idSecoundFriends = :first) "
-                      "OR (idFirstFriends = :first "
-                      "AND idSecoundFriends = :firstFriend)");
-        query.bindValue(":firstUnread", firstUnread);
-        query.bindValue(":secoundUnread", secoundUnread);
-        query.bindValue(":firstFriend", str);
+        query.bindValue(":firstFriend", idFriend);
         query.bindValue(":first", id);
         query.exec();
     }
@@ -594,7 +522,7 @@ void SocketThread::gettingFriends()
     for(int i = 0; i < listStructInfoFriend.size(); i++)
     {
         SlotSendToClient(listStructInfoFriend[i]);
-        QThread::msleep(15);
+        QThread::msleep(100);
     }
 }
 
@@ -603,40 +531,60 @@ void SocketThread::closeRoomFriendHangUp(QString name)
     AllRooms->closeRoomFriendHangUp(name);
 }
 
-void SocketThread::sendHistoryMessage(QString idFriend)
+void SocketThread::sendHistoryMessage(QString idFriend, QString i)
 {
+    int limit = 20 * i.toInt();
+    int offset = 20 * (i.toInt() - 1);
+
     QSqlQuery query = QSqlQuery(DataBase);
-    query.prepare("SELECT idFirstFriends, message, time FROM messages WHERE (idFirstFriends = :firstFriend "
+    query.prepare("SELECT idFirstFriends, idSecoundFriends, message, time, id, status FROM messages "
+                  "WHERE (idFirstFriends = :firstFriend "
                   "AND idSecoundFriends = :first) "
                   "OR (idFirstFriends = :first "
-                  "AND idSecoundFriends = :firstFriend)");
+                  "AND idSecoundFriends = :firstFriend) ORDER BY id DESC LIMIT :limit OFFSET :offset");
     query.bindValue(":firstFriend", idFriend);
     query.bindValue(":first", id);
+    query.bindValue(":limit", limit);
+    query.bindValue(":offset", offset);
     query.exec();
 
     QStringList messages;
 
     while(query.next())
     {
-        messages << "/getMessages/"
-                    + query.value(2).toString()
+        messages << query.value(1).toString()
+                    + "!"
+                    + query.value(4).toString()
+                    + "!"
+                    + query.value(3).toString()
                     + "!"
                     + query.value(0).toString()
                     + "!"
-                    + query.value(1).toString();
+                    + query.value(2).toString()
+                    + "!"
+                    + query.value(5).toString();
     }
 
-    for(int i = 0; i < messages.size() - 1; i++)
+    QString message = "/getMessages/";
+
+    if(i == "1")
     {
-        SlotSendToClient(messages[i]);
-        QThread::msleep(15);
+        for(int i = messages.size() - 1; i >= 0; i--)
+        {
+            //SlotSendToClient(messages[i]);
+            //QThread::msleep(15);
+            message += messages[i] + "/!/";
+        }
+        SlotSendToClient(message);
     }
-
-    SlotSendToClient(messages[messages.size() - 1] + "/lastMessage/");
-    QThread::msleep(15);
-}
-
-QString SocketThread::getId()
-{
-    return id;
+    else
+    {
+        for(int i = 0; i <= messages.size() - 1; i++)
+        {
+            //SlotSendToClient(messages[i]);
+            //QThread::msleep(15);
+            message += messages[i] + "/!/";
+        }
+        SlotSendToClient(message);
+    }
 }

@@ -12,7 +12,6 @@ class Rooms;
 class Room;
 class Server;
 class TcpSocket;
-class Sox;
 
 class SocketThread : public QThread
 {
@@ -26,23 +25,16 @@ public:
     void Authentication(QString login, QString pass);
     void CreateRooms(QString name, QString pass);
     void GetInRoom(QString name, QString pass);
-    void writingToFile(QByteArray buffer);
-    void removeNoise();
     void gettingFriends();
     void closeRoomFriendHangUp(QString name);
-    void sendHistoryMessage(QString idFriend);
-    QString getId();
+    void sendHistoryMessage(QString idFriend, QString i);
 
     int numberDisplay = 0;
-
-signals:
-    void noiseRemove();
 
 private slots:
     void SlotSendToClient(QString str);
     void OnReadyRead();
     void OnDisconnected();
-    void sendSound();
     void checkId(QString testId, QString nameRoom, QString passRoom);
     void checkIdForSendMessage(QString testId, QString message, QString idSender);
     void checkFriendsUpdateOnline(QString testId, QString idFriend, QString status);
@@ -53,11 +45,9 @@ private:
     QSqlDatabase DataBase;
     Room* room = nullptr;
     TcpSocket* Socket;
-    Sox *myProcess;
     QString name;
     QString id;
     QList<SocketThread*>* socketClients;
-    QThread thread;
 
 };
 

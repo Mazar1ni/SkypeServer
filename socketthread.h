@@ -38,6 +38,8 @@ private slots:
     void checkId(QString testId, QString nameRoom, QString passRoom);
     void checkIdForSendMessage(QString testId, QString message, QString idSender);
     void checkFriendsUpdateOnline(QString testId, QString idFriend, QString status);
+    void chekIdForSendBeginnigCall(QString testId, QString idFriend);
+    void chekIdForSendEndingCall(QString testId, QString idFriend);
 
 private:
     int SocketDescriptor;
@@ -45,9 +47,10 @@ private:
     QSqlDatabase DataBase;
     Room* room = nullptr;
     TcpSocket* Socket;
-    QString name;
+    QString loginUser;
     QString id;
     QList<SocketThread*>* socketClients;
+    bool fakeUser = false;
 
 };
 

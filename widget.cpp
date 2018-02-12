@@ -4,7 +4,7 @@
 
 using namespace std;
 
-Widget::Widget()
+Widget::Widget(QObject* parent) : QObject(parent)
 {
     // подключение к бд
     DataBase = QSqlDatabase::addDatabase("QMYSQL");
@@ -26,7 +26,9 @@ Widget::Widget()
 
 Widget::~Widget()
 {
-
+    QSqlQuery query = QSqlQuery(DataBase);
+    query.prepare("UPDATE users SET status = '0'");
+    query.exec();
 }
 
 void Widget::newConnection()

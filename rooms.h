@@ -16,7 +16,8 @@ public:
 
     Room *CreateRoom(QString name, QString pass, TcpSocket *socket, QSqlDatabase *db);
     Room *GetInRoom(QString name, QString pass, TcpSocket *socket);
-    void closeRoomFriendHangUp(QString name);
+    void closeRoomFriendHangUp(QString name, TcpSocket *SentAudio);
+    void removeRoom(Room *room);
 
 private:
     QList<Room*> rooms;

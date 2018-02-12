@@ -13,7 +13,7 @@ class Widget : public QObject
     Q_OBJECT
 
 public:
-    Widget();
+    Widget(QObject* parent = nullptr);
     ~Widget();
 
 private slots:

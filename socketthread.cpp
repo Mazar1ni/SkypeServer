@@ -8,7 +8,8 @@
 
 using namespace std;
 
-SocketThread::SocketThread(int descriptor, Rooms* rooms, QSqlDatabase db, QList<SocketThread *> *Clients, QObject * parent) :
+SocketThread::SocketThread(int descriptor, Rooms* rooms, QSqlDatabase db, QList<SocketThread *> *Clients,
+                           QObject * parent) :
     QThread(parent), SocketDescriptor(descriptor), AllRooms(rooms), DataBase(db), socketClients(Clients)
 {
 
@@ -223,6 +224,22 @@ void SocketThread::chekIdForSendEndingCall(QString testId, QString idFriend)
     }
 }
 
+void SocketThread::changeInfoAboutYourself(QString testId, QString idFriend, QString info)
+{
+    if(id == testId)
+    {
+        QString mess = "/updateFriendInfo/" + idFriend + "!" + info;
+
+        QByteArray  arr;
+
+        QDataStream out(&arr, QIODevice::WriteOnly);
+        out << mess;
+
+        QMetaObject::invokeMethod(Socket, "onWrite", Qt::AutoConnection,
+                                  Q_ARG(QByteArray, arr));
+    }
+}
+
 void SocketThread::OnReadyRead()
 {
     QByteArray buffer;
@@ -240,7 +257,6 @@ void SocketThread::OnReadyRead()
     }
     else if(buffer.indexOf("/camera/") != -1 || buffer.indexOf("/end/") != -1)
     {
-        //Socket->write(buffer);
         room->SendAudioToAllClients(Socket, buffer);
     }
     else if(str.indexOf("/startRecordVideo/") != -1 || str.indexOf("/stopRecordVideo/") != -1)
@@ -251,7 +267,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/1/") != -1)
     {
         // удаление идентификатора
-        str.remove(str.length() - 3, 3);
+        str.remove("/1/");
 
         // разделение логина и пароля
         QStringList list = str.split("!");
@@ -261,7 +277,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/2/") != -1)
     {
         // удаление идентификатора
-        str.remove(str.length() - 3, 3);
+        str.remove("/2/");
 
         // разделение имя комнаты и пароля комнаты
         QStringList list = str.split(":");
@@ -271,7 +287,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/3/") != -1)
     {
         // удаление идентификатора
-        str.remove(str.length() - 3, 3);
+        str.remove("/3/");
 
         // разделение имя комнаты и пароля комнаты
         QStringList list = str.split(":");
@@ -281,7 +297,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/4/") != -1)
     {
         // удаление идентификатора
-        str.remove(str.length() - 3, 3);
+        str.remove("/4/");
 
         gettingFriends();
     }
@@ -289,7 +305,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/19/") != -1)
     {
         // удаление идентификатора
-        str.remove(0, 4);
+        str.remove("/19/");
 
         for(int i = 0; i < socketClients->size(); i++)
         {
@@ -307,7 +323,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/30/") != -1)
     {
         // удаление идентификатора
-        str.remove(0, 4);
+        str.remove("/30/");
 
         // разделение имя комнаты и пароля комнаты
         QStringList list = str.split(":");
@@ -317,7 +333,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/31/") != -1)
     {
         // удаление идентификатора
-        str.remove(0, 4);
+        str.remove("/31/");
 
         // разделение имя комнаты и пароля комнаты
         QStringList list = str.split(":");
@@ -327,7 +343,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/HistoryMessage/") != -1)
     {
         // удаление идентификатора
-        str.remove(0, 16);
+        str.remove("/HistoryMessage/");
 
         QStringList list = str.split("!");
 
@@ -337,7 +353,7 @@ void SocketThread::OnReadyRead()
     else if(str.indexOf("/message/") != -1)
     {
         // удаление идентификатора
-        str.remove(0, 9);
+        str.remove("/message/");
 
         QStringList list = str.split("!");
 
@@ -407,7 +423,7 @@ void SocketThread::OnReadyRead()
     }
     else if(str.indexOf("/readUnreadMessages/") != -1)
     {
-        str.remove(0, 20);
+        str.remove("/readUnreadMessages/");
 
         QStringList list = str.split("!");
 
@@ -455,7 +471,7 @@ void SocketThread::OnReadyRead()
     }
     else if(str.indexOf("/beginnigCall/") != -1)
     {
-        str.remove(0, 14);
+        str.remove("/beginnigCall/");
 
         //P.S. str - это id друга
         for(int i = 0; i < socketClients->size(); i++)
@@ -475,7 +491,7 @@ void SocketThread::OnReadyRead()
     }
     else if(str.indexOf("/endingCall/") != -1)
     {
-        str.remove(0, 12);
+        str.remove("/endingCall/");
 
         //P.S. str - это id друга
         for(int i = 0; i < socketClients->size(); i++)
@@ -488,9 +504,120 @@ void SocketThread::OnReadyRead()
             }
         }
     }
+    else if(str.indexOf("/profileInfo/") != -1)
+    {
+        str.remove("/profileInfo/");
+
+        QString info;
+        QSqlQuery query = QSqlQuery(DataBase);
+
+        if(str.indexOf("/name/") != -1)
+        {
+            info = str;
+            str.remove("/name/");
+
+            query.prepare("UPDATE users SET Name = :name "
+                          "WHERE id = :id");
+            query.bindValue(":name", str);
+            query.bindValue(":id", id);
+            query.exec();
+        }
+        else if(str.indexOf("/email/") != -1)
+        {
+            info = str;
+            str.remove("/email/");
+
+            query.prepare("UPDATE users SET Email = :email "
+                          "WHERE id = :id");
+            query.bindValue(":email", str);
+            query.bindValue(":id", id);
+            query.exec();
+        }
+        else if(str.indexOf("/phone/") != -1)
+        {
+            info = str;
+            str.remove("/phone/");
+
+            query.prepare("UPDATE users SET Phone = :phone "
+                          "WHERE id = :id");
+            query.bindValue(":phone", str);
+            query.bindValue(":id", id);
+            query.exec();
+        }
+        query.exec();
+
+        if(str.indexOf("/changePass/") != -1)
+        {
+            str.remove("/changePass/");
+            str.remove("/oldPass/");
+
+            int index = str.indexOf("/newPass/");
+
+            QString oldPass = str.left(index);
+            str.remove(0, index);
+
+            str.remove("/newPass/");
+
+            QString newPass = str;
+
+            query.prepare("SELECT Password FROM users WHERE id = :id");
+            query.bindValue(":id", id);
+            query.exec();
+
+            query.next();
+
+            if(oldPass != query.value("Password").toString())
+            {
+                SlotSendToClient("/Incorrect password/");
+                return;
+            }
+
+            query.prepare("UPDATE users SET Password = :pass "
+                          "WHERE id = :id");
+            query.bindValue(":pass", newPass);
+            query.bindValue(":id", id);
+            query.exec();
+
+            SlotSendToClient("/Password changed/");
+        }
+        else
+        {
+            QSqlQuery query = QSqlQuery(DataBase);
+            query.prepare("SELECT idFirstFriends, idSecoundFriends FROM friends WHERE idFirstFriends = :first "
+                          "OR idSecoundFriends = :secound");
+            query.bindValue(":first", id);
+            query.bindValue(":secound", id);
+            query.exec();
+
+            while(query.next())
+            {
+                for(int i = 0; i < socketClients->size(); i++)
+                {
+                    if(socketClients->at(i) != this)
+                    {
+                        if(query.value("idFirstFriends").toString() != id)
+                        {
+                            QMetaObject::invokeMethod(socketClients->at(i), "changeInfoAboutYourself",
+                                                      Qt::AutoConnection,
+                                                      Q_ARG(QString, query.value("idFirstFriends").toString()),
+                                                      Q_ARG(QString, id),
+                                                      Q_ARG(QString, info));
+                        }
+                        else
+                        {
+                            QMetaObject::invokeMethod(socketClients->at(i), "changeInfoAboutYourself",
+                                                      Qt::AutoConnection,
+                                                      Q_ARG(QString, query.value("idSecoundFriends").toString()),
+                                                      Q_ARG(QString, id),
+                                                      Q_ARG(QString, info));
+                        }
+                    }
+                }
+            }
+        }
+    }
     else
     {
-        //Socket->write(buffer);
         room->SendAudioToAllClients(Socket, buffer);
     }
 }

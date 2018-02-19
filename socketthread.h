@@ -40,6 +40,7 @@ private slots:
     void checkFriendsUpdateOnline(QString testId, QString idFriend, QString status);
     void chekIdForSendBeginnigCall(QString testId, QString idFriend);
     void chekIdForSendEndingCall(QString testId, QString idFriend);
+    void changeInfoAboutYourself(QString testId, QString idFriend, QString info);
 
 private:
     int SocketDescriptor;

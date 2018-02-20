@@ -41,6 +41,7 @@ private slots:
     void chekIdForSendBeginnigCall(QString testId, QString idFriend);
     void chekIdForSendEndingCall(QString testId, QString idFriend);
     void changeInfoAboutYourself(QString testId, QString idFriend, QString info);
+    void sendFriendUpdateIcon(QString testId, QString idFriend, QString iconName);
 
 private:
     int SocketDescriptor;

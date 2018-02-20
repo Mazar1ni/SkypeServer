@@ -35,7 +35,7 @@ void SocketThread::Authentication(QString login, QString pass)
 {
     // запрос на поиск логина в бд
     QSqlQuery query = QSqlQuery(DataBase);
-    query.prepare("SELECT id, Login, Email, Phone, Name, Password, Status FROM users WHERE Login = :login");
+    query.prepare("SELECT id, Login, Email, Phone, Name, Password, Status, IconName FROM users WHERE Login = :login");
     query.bindValue(":login", login);
     query.exec();
 
@@ -45,6 +45,7 @@ void SocketThread::Authentication(QString login, QString pass)
     QString nameUser;
     QString phone;
     QString status;
+    QString iconName;
 
     if(query.next())
     {
@@ -54,6 +55,7 @@ void SocketThread::Authentication(QString login, QString pass)
         nameUser = query.value("Name").toString();
         phone = query.value("Phone").toString();
         status = query.value("Status").toString();
+        iconName = query.value("IconName").toString();
     }
 
     // проверка, найден ли такой пользователь
@@ -70,7 +72,25 @@ void SocketThread::Authentication(QString login, QString pass)
             else
             {
                 loginUser = login;
-                SlotSendToClient("/1/" + id + "!" + loginUser + "!" + email + "!" + nameUser + "!" + phone);
+
+                // новый рандомный идентификатор
+                query.prepare("SELECT FLOOR(RAND() * 99999) AS IdNu "
+                              "FROM users "
+                              "WHERE 'IdNu' NOT IN (SELECT IdentificationNumber FROM users) "
+                              "LIMIT 1");
+                query.exec();
+                query.next();
+
+                QString idNumber = query.value("IdNu").toString();
+
+                query.prepare("UPDATE users SET IdentificationNumber = :idNumber "
+                              "WHERE id = :id");
+                query.bindValue(":idNumber", idNumber);
+                query.bindValue(":id", id);
+                query.exec();
+
+                SlotSendToClient("/1/" + id + "!" + loginUser + "!" + email + "!" + nameUser + "!" + phone
+                                 + "!" + idNumber + "!" + iconName);
 
                 query.prepare("UPDATE users SET status = '1' WHERE id = :id");
                 query.bindValue(":id", id);
@@ -229,6 +249,22 @@ void SocketThread::changeInfoAboutYourself(QString testId, QString idFriend, QSt
     if(id == testId)
     {
         QString mess = "/updateFriendInfo/" + idFriend + "!" + info;
+
+        QByteArray  arr;
+
+        QDataStream out(&arr, QIODevice::WriteOnly);
+        out << mess;
+
+        QMetaObject::invokeMethod(Socket, "onWrite", Qt::AutoConnection,
+                                  Q_ARG(QByteArray, arr));
+    }
+}
+
+void SocketThread::sendFriendUpdateIcon(QString testId, QString idFriend, QString iconName)
+{
+    if(id == testId)
+    {
+        QString mess = "/updateFriendIcon/" + idFriend + "!" + iconName;
 
         QByteArray  arr;
 
@@ -616,6 +652,50 @@ void SocketThread::OnReadyRead()
             }
         }
     }
+    else if(str.indexOf("/sendFriendsUpdateIcon/") != -1)
+    {
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("SELECT IconName FROM users WHERE id = :id");
+        query.bindValue(":id", id);
+        query.exec();
+        query.next();
+
+        QString iconName = query.value(0).toString();
+
+        query.prepare("SELECT idFirstFriends, idSecoundFriends FROM friends WHERE idFirstFriends = :first "
+                      "OR idSecoundFriends = :secound");
+        query.bindValue(":first", id);
+        query.bindValue(":secound", id);
+        query.exec();
+
+        while(query.next())
+        {
+            for(int i = 0; i < socketClients->size(); i++)
+            {
+                if(socketClients->at(i) != this)
+                {
+                    if(query.value("idFirstFriends").toString() != id)
+                    {
+                        QMetaObject::invokeMethod(socketClients->at(i), "sendFriendUpdateIcon",
+                                                  Qt::AutoConnection,
+                                                  Q_ARG(QString, query.value("idFirstFriends").toString()),
+                                                  Q_ARG(QString, id),
+                                                  Q_ARG(QString, iconName));
+                    }
+                    else
+                    {
+                        QMetaObject::invokeMethod(socketClients->at(i), "sendFriendUpdateIcon",
+                                                  Qt::AutoConnection,
+                                                  Q_ARG(QString, query.value("idSecoundFriends").toString()),
+                                                  Q_ARG(QString, id),
+                                                  Q_ARG(QString, iconName));
+                    }
+                }
+            }
+        }
+
+        SlotSendToClient("/updateMainIcon/" + iconName);
+    }
     else
     {
         room->SendAudioToAllClients(Socket, buffer);
@@ -704,7 +784,7 @@ void SocketThread::gettingFriends()
             friends = query.value("idSecoundFriends").toString();
         }
 
-        queryInfo.prepare("SELECT Login, Email, Name, Phone, Status FROM users WHERE id = :id");
+        queryInfo.prepare("SELECT Login, Email, Name, Phone, Status, IconName FROM users WHERE id = :id");
         queryInfo.bindValue(":id", friends);
         queryInfo.exec();
 
@@ -737,7 +817,8 @@ void SocketThread::gettingFriends()
         infoFriend += queryInfo.value("Name").toString() + "!";
         infoFriend += queryInfo.value("Phone").toString() + "!";
         infoFriend += queryInfo.value("Status").toString() + "!";
-        infoFriend += underMessages;
+        infoFriend += underMessages + "!";
+        infoFriend += queryInfo.value("IconName").toString();
 
         listStructInfoFriend << infoFriend;
     }

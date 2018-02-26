@@ -13,6 +13,7 @@ public:
     explicit FileTransfer(int descriptor, QSqlDatabase db, QObject *parent = nullptr);
     void run();
     void endFile(QByteArray buffer);
+    void endUploadFile(QByteArray buffer);
 
 signals:
 
@@ -30,6 +31,7 @@ private:
     QString id;
     QString nameFile;
     QString lastIconName;
+    bool isCanSendData = false;
 
 };
 

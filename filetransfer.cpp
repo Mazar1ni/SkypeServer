@@ -34,15 +34,20 @@ void FileTransfer::endFile(QByteArray buffer)
     query.next();
 
     lastIconName = query.value(0).toString();
-    QTimer::singleShot(5000, [this](){
-        QFile("clientsFiles/" + id + "/" + this->lastIconName).remove();
-    });
+    QFile("clientsFiles/" + id + "/" + this->lastIconName).remove();
 
     query.prepare("UPDATE users SET IconName = :iconName WHERE id = :id");
     query.bindValue(":id", id);
     query.bindValue(":iconName", nameFile);
     query.exec();
 
+    uploadFile->deleteLater();
+}
+
+void FileTransfer::endUploadFile(QByteArray buffer)
+{
+    uploadFile->write(buffer);
+    uploadFile->close();
     uploadFile->deleteLater();
 }
 
@@ -72,10 +77,10 @@ void FileTransfer::onReadyRead()
         if(!query.next())
         {
             slotSendClient("/invalidData/");
-            deleteLater();
         }
+        isCanSendData = true;
     }
-    else if(str.indexOf("/informationFileIcon/") != -1)
+    else if(str.indexOf("/informationFileIcon/") != -1 && isCanSendData == true)
     {
         str.remove("/informationFileIcon/");
 
@@ -85,18 +90,13 @@ void FileTransfer::onReadyRead()
         uploadFile = new QFile("clientsFiles/" + id + "/" + nameFile);
         uploadFile->open(QFile::WriteOnly);
     }
-    else if(buffer.indexOf("endFile") != -1)
-    {
-        buffer.remove(buffer.size() - 8, 7);
-        endFile(buffer);
-    }
-    else if(buffer.indexOf("mainIconEndFile") != -1)
+    else if(buffer.indexOf("mainIconEndFile") != -1 && isCanSendData == true)
     {
         buffer.remove(buffer.size() - 16, 15);
         endFile(buffer);
         slotSendClient("/successTransferMainIcon/");
     }
-    else if(str.indexOf("/informationFileAcquisitionIcon/") != -1)
+    else if(str.indexOf("/informationFileAcquisitionIcon/") != -1 && isCanSendData == true)
     {
         str.remove("/informationFileAcquisitionIcon/");
 
@@ -106,9 +106,35 @@ void FileTransfer::onReadyRead()
         file.open(QFile::ReadOnly);
         QByteArray dataFile = file.readAll();
 
-        socket->write(dataFile + "/endFileIcon/");
+        socket->write(dataFile + "endFileIcon");
     }
-    else
+    else if(str.indexOf("/informationUploadFile/") != -1 && isCanSendData == true)
+    {
+        str.remove("/informationUploadFile/");
+
+        QDir("clientsFiles/").mkdir(id);
+        uploadFile = new QFile("clientsFiles/" + id + "/" + str);
+        uploadFile->open(QFile::WriteOnly);
+    }
+    else if(str.indexOf("/informationAcquisitionFile/") != -1 && isCanSendData == true)
+    {
+        str.remove("/informationAcquisitionFile/");
+
+        QStringList list = str.split("!");
+
+        QFile file("clientsFiles/" + list[0] + "/" + list[1]);
+        file.open(QFile::ReadOnly);
+        QByteArray dataFile = file.readAll();
+
+        socket->write(dataFile + "endFile");
+    }
+    else if(buffer.indexOf("uploadEndFile") != -1 && isCanSendData == true)
+    {
+        buffer.remove(buffer.size() - 14, 13);
+        endUploadFile(buffer);
+        slotSendClient("/successTransferFile/");
+    }
+    else if(isCanSendData == true)
     {
         uploadFile->write(buffer);
     }

@@ -309,6 +309,55 @@ void SocketThread::OnReadyRead()
         QStringList list = str.split("!");
         Authentication(list[0], list[1]);
     }
+    else if(str.indexOf("/registration/") != -1)
+    {
+        fakeUser = true;
+        // удаление идентификатора
+        str.remove("/registration/");
+
+        // разделение
+        QStringList list = str.split("!");
+        /*list[0] = name
+         * list[1] = email
+         * list[2] = login
+         * list[3] = phone
+         * list[4] = pass
+         * list[5] = date
+        */
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("SELECT * FROM users WHERE Login = :login");
+        query.bindValue(":login", list[2]);
+        query.exec();
+
+        if(query.next())
+        {
+            SlotSendToClient("/loginExists/");
+            return;
+        }
+
+        // новый рандомный идентификатор
+        query.prepare("SELECT FLOOR(RAND() * 99999) AS IdNu "
+                      "FROM users "
+                      "WHERE 'IdNu' NOT IN (SELECT IdentificationNumber FROM users) "
+                      "LIMIT 1");
+        query.exec();
+        query.next();
+
+        QString idNumber = query.value("IdNu").toString();
+
+        query.prepare("INSERT INTO users (Login, Password, Email, Name, Phone, DateBirth, IdentificationNumber) "
+                      "VALUES (:Login, :Password, :Email, :Name, :Phone, :DateBirth, :IdentificationNumber)");
+        query.bindValue(":Login", list[2]);
+        query.bindValue(":Password", list[4]);
+        query.bindValue(":Email", list[1]);
+        query.bindValue(":Name", list[0]);
+        query.bindValue(":Phone", list[3]);
+        query.bindValue(":DateBirth", list[5]);
+        query.bindValue(":IdentificationNumber", idNumber);
+        query.exec();
+
+        SlotSendToClient("/successfully/");
+    }
     // проверка, относитмя ли этот текст к созданию комнаты
     else if(str.indexOf("/2/") != -1)
     {

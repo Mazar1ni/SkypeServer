@@ -26,6 +26,7 @@ public:
     void CreateRooms(QString name, QString pass);
     void GetInRoom(QString name, QString pass);
     void gettingFriends();
+    void gettingRecent();
     void closeRoomFriendHangUp(QString name);
     void sendHistoryMessage(QString idFriend, QString i);
 

@@ -386,6 +386,39 @@ void SocketThread::OnReadyRead()
 
         gettingFriends();
     }
+    // проверка, относится ли этот текст к получению последних звонков клиентом
+    else if(str.indexOf("/recent/") != -1)
+    {
+        // удаление идентификатора
+        str.remove("/recent/");
+
+        gettingRecent();
+    }
+    else if(str.indexOf("/newRecent/") != -1)
+    {
+        // удаление идентификатора
+        str.remove("/newRecent/");
+
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("SELECT Login, Email, Name, Phone, Status, IconName FROM users WHERE id = :id");
+        query.bindValue(":id", str);
+        query.exec();
+
+        query.next();
+
+        QString infoFriend = "/newRecent/";
+
+        infoFriend += str + "!";
+        infoFriend += query.value("Login").toString() + "!";
+        infoFriend += query.value("Email").toString() + "!";
+        infoFriend += query.value("Name").toString() + "!";
+        infoFriend += query.value("Phone").toString() + "!";
+        infoFriend += query.value("Status").toString() + "!";
+        infoFriend += "0!";
+        infoFriend += query.value("IconName").toString();
+
+        SlotSendToClient(infoFriend);
+    }
     // проверка, относится ли этот текст к начал звонка другу
     else if(str.indexOf("/19/") != -1)
     {
@@ -867,6 +900,63 @@ void SocketThread::gettingFriends()
         infoFriend += queryInfo.value("Phone").toString() + "!";
         infoFriend += queryInfo.value("Status").toString() + "!";
         infoFriend += underMessages + "!";
+        infoFriend += queryInfo.value("IconName").toString();
+
+        listStructInfoFriend << infoFriend;
+    }
+
+    for(int i = 0; i < listStructInfoFriend.size(); i++)
+    {
+        SlotSendToClient(listStructInfoFriend[i]);
+        QThread::msleep(100);
+    }
+}
+
+void SocketThread::gettingRecent()
+{
+    // запрос на поиск записи в бд
+    QSqlQuery query = QSqlQuery(DataBase);
+    query.prepare("SELECT DISTINCT idFirstFriends, idSecoundFriends FROM (SELECT friends.idFirstFriends, friends.idSecoundFriends, messages.id FROM friends, messages "
+                  "WHERE (messages.idFirstFriends = :first OR messages.idSecoundFriends = :secound) "
+                  "AND ((friends.idFirstFriends = messages.idFirstFriends "
+                  "AND friends.idSecoundFriends = messages.idSecoundFriends) "
+                  "OR (friends.idFirstFriends = messages.idSecoundFriends "
+                  "AND friends.idSecoundFriends = messages.idFirstFriends)) "
+                  "AND (messages.message LIKE :message) "
+                  "ORDER BY messages.id DESC) t LIMIT 20");
+    query.bindValue(":first", id);
+    query.bindValue(":secound", id);
+    query.bindValue(":message", "%beginningCall%");
+    query.exec();
+
+    QString infoFriend;
+    QStringList listStructInfoFriend;
+    QString friends;
+
+    QSqlQuery queryInfo = QSqlQuery(DataBase);
+    while(query.next())
+    {
+        friends = query.value("idFirstFriends").toString();
+        if(friends == id)
+        {
+            friends = query.value("idSecoundFriends").toString();
+        }
+
+        queryInfo.prepare("SELECT Login, Email, Name, Phone, Status, IconName FROM users WHERE id = :id");
+        queryInfo.bindValue(":id", friends);
+        queryInfo.exec();
+
+        queryInfo.next();
+
+        infoFriend = "/recent/";
+
+        infoFriend += friends + "!";
+        infoFriend += queryInfo.value("Login").toString() + "!";
+        infoFriend += queryInfo.value("Email").toString() + "!";
+        infoFriend += queryInfo.value("Name").toString() + "!";
+        infoFriend += queryInfo.value("Phone").toString() + "!";
+        infoFriend += queryInfo.value("Status").toString() + "!";
+        infoFriend += "0!";
         infoFriend += queryInfo.value("IconName").toString();
 
         listStructInfoFriend << infoFriend;

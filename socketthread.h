@@ -27,6 +27,7 @@ public:
     void GetInRoom(QString name, QString pass);
     void gettingFriends();
     void gettingRecent();
+    void gettingInviteFriends();
     void closeRoomFriendHangUp(QString name);
     void sendHistoryMessage(QString idFriend, QString i);
 
@@ -41,6 +42,8 @@ private slots:
     void checkFriendsUpdateOnline(QString testId, QString idFriend, QString status);
     void chekIdForSendBeginnigCall(QString testId, QString idFriend);
     void chekIdForSendEndingCall(QString testId, QString idFriend);
+    void checkIdForInviteToFriend(QString testId, QString idFriend);
+    void checkIdForAcceptInviteToFriend(QString testId, QString idFriend);
     void changeInfoAboutYourself(QString testId, QString idFriend, QString info);
     void sendFriendUpdateIcon(QString testId, QString idFriend, QString iconName);
 

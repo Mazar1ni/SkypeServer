@@ -244,6 +244,54 @@ void SocketThread::chekIdForSendEndingCall(QString testId, QString idFriend)
     }
 }
 
+void SocketThread::checkIdForInviteToFriend(QString testId, QString idFriend)
+{
+    if(id == testId)
+    {
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("SELECT Login, Email, Name, Phone, Status, IconName FROM users WHERE id = :id");
+        query.bindValue(":id", idFriend);
+        query.exec();
+
+        query.next();
+
+        QString infoFriend = "/inviteToFriend/";
+
+        infoFriend += idFriend + "!";
+        infoFriend += query.value("Login").toString() + "!";
+        infoFriend += query.value("Email").toString() + "!";
+        infoFriend += query.value("Name").toString() + "!";
+        infoFriend += query.value("Phone").toString() + "!";
+        infoFriend += query.value("Status").toString() + "!";
+        infoFriend += "0!";
+        infoFriend += query.value("IconName").toString();
+
+        QByteArray  arr;
+
+        QDataStream out(&arr, QIODevice::WriteOnly);
+        out << infoFriend;
+
+        QMetaObject::invokeMethod(Socket, "onWrite", Qt::AutoConnection,
+                                  Q_ARG(QByteArray, arr));
+    }
+}
+
+void SocketThread::checkIdForAcceptInviteToFriend(QString testId, QString idFriend)
+{
+    if(id == testId)
+    {
+        QString mess = "/acceptInviteToFriend/" + idFriend;
+
+        QByteArray  arr;
+
+        QDataStream out(&arr, QIODevice::WriteOnly);
+        out << mess;
+
+        QMetaObject::invokeMethod(Socket, "onWrite", Qt::AutoConnection,
+                                  Q_ARG(QByteArray, arr));
+    }
+}
+
 void SocketThread::changeInfoAboutYourself(QString testId, QString idFriend, QString info)
 {
     if(id == testId)
@@ -394,6 +442,13 @@ void SocketThread::OnReadyRead()
 
         gettingRecent();
     }
+    else if(str.indexOf("/inviteFr/") != -1)
+    {
+        // удаление идентификатора
+        str.remove("/inviteFr/");
+
+        gettingInviteFriends();
+    }
     else if(str.indexOf("/newRecent/") != -1)
     {
         // удаление идентификатора
@@ -436,6 +491,132 @@ void SocketThread::OnReadyRead()
                                           Q_ARG(QString, "123"));
             }
         }
+    }
+    else if(str.indexOf("/potentialFriends/") != -1)
+    {
+        str.remove("/potentialFriends/");
+
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("SELECT id, Login, Email, Name, Phone, Status, IconName "
+                      "FROM users "
+                      "WHERE (Name LIKE :name) AND "
+                      "id NOT IN "
+                      "(SELECT idFirstFriends FROM friends WHERE idSecoundFriends = :id) "
+                      "AND id NOT IN (SELECT idSecoundFriends FROM friends WHERE idFirstFriends = :id) "
+                      "AND id NOT IN (SELECT idFirstFriends FROM invitefriends WHERE idSecoundFriends = :id) "
+                      "AND id NOT IN (SELECT idSecoundFriends FROM invitefriends WHERE idFirstFriends = :id)");
+        query.bindValue(":name", "%" + str + "%");
+        query.bindValue(":id", id);
+        query.exec();
+
+        QSqlQuery queryInvite = QSqlQuery(DataBase);
+        QString infoFriend;
+        QStringList listStructInfoFriend;
+        QString inviteFriends;
+
+        while(query.next())
+        {
+            if(query.value("id").toString() == id)
+            {
+                continue;
+            }
+
+            infoFriend = "/potentialFriends/";
+
+            infoFriend += query.value("id").toString() + "!";
+            infoFriend += query.value("Login").toString() + "!";
+            infoFriend += query.value("Email").toString() + "!";
+            infoFriend += query.value("Name").toString() + "!";
+            infoFriend += query.value("Phone").toString() + "!";
+            infoFriend += query.value("Status").toString() + "!";
+            infoFriend += "0!";
+            infoFriend += query.value("IconName").toString() + "!";
+
+            queryInvite.prepare("SELECT * FROM invitefriends "
+                                "WHERE (idFirstFriends = :id AND idSecoundFriends = :idFriend) "
+                                "OR (idFirstFriends = :idFriend AND idSecoundFriends = :id)");
+            queryInvite.bindValue(":id", id);
+            queryInvite.bindValue(":idFriend", query.value("id").toString());
+            queryInvite.exec();
+
+            if(queryInvite.next())
+            {
+                inviteFriends = "0";
+            }
+            else
+            {
+                inviteFriends = "1";
+            }
+
+            infoFriend += inviteFriends;
+
+            listStructInfoFriend << infoFriend;
+        }
+
+        for(int i = 0; i < listStructInfoFriend.size(); i++)
+        {
+            SlotSendToClient(listStructInfoFriend[i]);
+            QThread::msleep(100);
+        }
+    }
+    else if(str.indexOf("/inviteToFriends/") != -1)
+    {
+        str.remove("/inviteToFriends/");
+
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("INSERT INTO invitefriends (idFirstFriends, idSecoundFriends) "
+                      "VALUES (:idFirstFriends, :idSecoundFriends)");
+        query.bindValue(":idFirstFriends", id);
+        query.bindValue(":idSecoundFriends", str);
+        query.exec();
+
+        for(int i = 0; i < socketClients->size(); i++)
+        {
+            if(socketClients->at(i) != this)
+            {
+                QMetaObject::invokeMethod(socketClients->at(i), "checkIdForInviteToFriend", Qt::AutoConnection,
+                                      Q_ARG(QString, str),
+                                      Q_ARG(QString, id));
+            }
+        }
+    }
+    else if(str.indexOf("/acceptInviteToFriends/") != -1)
+    {
+        str.remove("/acceptInviteToFriends/");
+
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("DELETE FROM invitefriends WHERE (idFirstFriends = :id AND idSecoundFriends = :idFriend) "
+                      "OR (idFirstFriends = :idFriend AND idSecoundFriends = :id)");
+        query.bindValue(":id", id);
+        query.bindValue(":idFriend", str);
+        query.exec();
+
+        query.prepare("INSERT INTO friends (idFirstFriends, idSecoundFriends) "
+                      "VALUES (:idFirstFriends, :idSecoundFriends)");
+        query.bindValue(":idFirstFriends", id);
+        query.bindValue(":idSecoundFriends", str);
+        query.exec();
+
+        for(int i = 0; i < socketClients->size(); i++)
+        {
+            if(socketClients->at(i) != this)
+            {
+                QMetaObject::invokeMethod(socketClients->at(i), "checkIdForAcceptInviteToFriend", Qt::AutoConnection,
+                                      Q_ARG(QString, str),
+                                      Q_ARG(QString, id));
+            }
+        }
+    }
+    else if(str.indexOf("/doNotAcceptInviteToFriends/") != -1)
+    {
+        str.remove("/doNotAcceptInviteToFriends/");
+
+        QSqlQuery query = QSqlQuery(DataBase);
+        query.prepare("DELETE FROM invitefriends WHERE (idFirstFriends = :id AND idSecoundFriends = :idFriend) "
+                      "OR (idFirstFriends = :idFriend AND idSecoundFriends = :id)");
+        query.bindValue(":id", id);
+        query.bindValue(":idFriend", str);
+        query.exec();
     }
     // проверка, относится ли этот текст к взятию трубки другом
     else if(str.indexOf("/30/") != -1)
@@ -916,7 +1097,8 @@ void SocketThread::gettingRecent()
 {
     // запрос на поиск записи в бд
     QSqlQuery query = QSqlQuery(DataBase);
-    query.prepare("SELECT DISTINCT idFirstFriends, idSecoundFriends FROM (SELECT friends.idFirstFriends, friends.idSecoundFriends, messages.id FROM friends, messages "
+    query.prepare("SELECT DISTINCT idFirstFriends, idSecoundFriends FROM (SELECT friends.idFirstFriends, "
+                  "friends.idSecoundFriends, messages.id FROM friends, messages "
                   "WHERE (messages.idFirstFriends = :first OR messages.idSecoundFriends = :secound) "
                   "AND ((friends.idFirstFriends = messages.idFirstFriends "
                   "AND friends.idSecoundFriends = messages.idSecoundFriends) "
@@ -949,6 +1131,54 @@ void SocketThread::gettingRecent()
         queryInfo.next();
 
         infoFriend = "/recent/";
+
+        infoFriend += friends + "!";
+        infoFriend += queryInfo.value("Login").toString() + "!";
+        infoFriend += queryInfo.value("Email").toString() + "!";
+        infoFriend += queryInfo.value("Name").toString() + "!";
+        infoFriend += queryInfo.value("Phone").toString() + "!";
+        infoFriend += queryInfo.value("Status").toString() + "!";
+        infoFriend += "0!";
+        infoFriend += queryInfo.value("IconName").toString();
+
+        listStructInfoFriend << infoFriend;
+    }
+
+    for(int i = 0; i < listStructInfoFriend.size(); i++)
+    {
+        SlotSendToClient(listStructInfoFriend[i]);
+        QThread::msleep(100);
+    }
+}
+
+void SocketThread::gettingInviteFriends()
+{
+    // запрос на поиск записи в бд
+    QSqlQuery query = QSqlQuery(DataBase);
+    query.prepare("SELECT id, idFirstFriends, idSecoundFriends FROM invitefriends WHERE idSecoundFriends = :secound");
+    query.bindValue(":secound", id);
+    query.exec();
+
+    QString infoFriend;
+    QStringList listStructInfoFriend;
+    QString friends;
+
+    QSqlQuery queryInfo = QSqlQuery(DataBase);
+    while(query.next())
+    {
+        friends = query.value("idFirstFriends").toString();
+        if(friends == id)
+        {
+            friends = query.value("idSecoundFriends").toString();
+        }
+
+        queryInfo.prepare("SELECT Login, Email, Name, Phone, Status, IconName FROM users WHERE id = :id");
+        queryInfo.bindValue(":id", friends);
+        queryInfo.exec();
+
+        queryInfo.next();
+
+        infoFriend = "/inviteToFriend/";
 
         infoFriend += friends + "!";
         infoFriend += queryInfo.value("Login").toString() + "!";

@@ -21,6 +21,7 @@ public:
 private slots:
     void newConnection();
     void newConnectionTransferFile();
+    void newConnectionUpdater();
 
 private:
     QSqlDatabase DataBase;
@@ -28,6 +29,7 @@ private:
     Rooms* rooms;
     QTcpServer* systemServer;
     QTcpServer* fileTransferServer;
+    QTcpServer* updaterServer;
     QThread thread;
 };
 

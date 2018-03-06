@@ -2,6 +2,7 @@
 #include "socketthread.h"
 #include "rooms.h"
 #include "filetransfer.h"
+#include "updater.h"
 
 using namespace std;
 
@@ -27,6 +28,10 @@ Widget::Widget(QObject* parent) : QObject(parent)
     fileTransferServer = new QTcpServer();
     fileTransferServer->listen(QHostAddress::Any, 7071);
     connect(fileTransferServer, SIGNAL(newConnection()), this, SLOT(newConnectionTransferFile()));
+
+    updaterServer = new QTcpServer();
+    updaterServer->listen(QHostAddress::Any, 7072);
+    connect(updaterServer, SIGNAL(newConnection()), this, SLOT(newConnectionUpdater()));
 }
 
 Widget::~Widget()
@@ -49,4 +54,10 @@ void Widget::newConnectionTransferFile()
     FileTransfer* fileTransferSocket = new FileTransfer(fileTransferServer->nextPendingConnection()->socketDescriptor(),
                                                         DataBase);
     fileTransferSocket->start();
+}
+
+void Widget::newConnectionUpdater()
+{
+    Updater* updaterSocket = new Updater(updaterServer->nextPendingConnection()->socketDescriptor());
+    updaterSocket->start();
 }

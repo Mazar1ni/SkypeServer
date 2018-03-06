@@ -62,7 +62,8 @@ SOURCES += \
     rooms.cpp \
     room.cpp \
     tcpsocket.cpp \
-    filetransfer.cpp
+    filetransfer.cpp \
+    updater.cpp
 
 HEADERS += \
         widget.h \
@@ -70,7 +71,8 @@ HEADERS += \
     rooms.h \
     room.h \
     tcpsocket.h \
-    filetransfer.h
+    filetransfer.h \
+    updater.h
 
 SUBDIRS += \
     SkypeServer.pro

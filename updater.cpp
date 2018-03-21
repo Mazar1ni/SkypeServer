@@ -37,18 +37,13 @@ void Updater::updateProgram(QString path)
         }
         else
         {
-            QFile testFile(path + i_file.fileName());
             QString lastModified;
-            if(testFile.open(QIODevice::ReadOnly))
-            {
-                QFileInfo fileInfo(testFile);
-                QDateTime d;
-                d = fileInfo.lastModified();
-                lastModified = d.toString("dd MM yyyy");
-            }
+            QDateTime d;
+            d = i_file.lastModified();
+            lastModified = d.toString("dd MM yyyy");
             path.remove(mainPath);
             slotSendClient("/fileTest/" + path + i_file.fileName() + "$" + lastModified);
-            QThread::msleep(15);
+            QThread::msleep(30);
         }
     }
 }
@@ -91,13 +86,14 @@ void Updater::onReadyRead()
     {
         str.remove("/version/");
 
-        QFile out("version/version.txt");
+        QFile out("Z:/root/Release/version/version.txt");
         QString text;
         if(out.open(QIODevice::ReadOnly))
         {
             QTextStream stream(&out);
             text = stream.readAll();
         }
+        out.close();
 
         version = text;
 
@@ -109,9 +105,9 @@ void Updater::onReadyRead()
         {
             slotSendClient("/doNotMatch/");
             QThread::msleep(30);
-            mainPath = "version/Skype-" + text + "/";
+            mainPath = "Z:/root/Release/version/Skype-" + text + "/";
             updateProgram(mainPath);
-            qDebug("wellHow");
+            QThread::msleep(30);
             slotSendClient("/wellHow/");
         }
     }
@@ -140,7 +136,8 @@ void Updater::onReadyRead()
 void Updater::onDisconnected()
 {
     socket->close();
-    quit();
+    terminate();
+    wait();
     deleteLater();
 }
 

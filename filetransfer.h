@@ -12,8 +12,8 @@ class FileTransfer : public QThread
 public:
     explicit FileTransfer(int descriptor, QSqlDatabase db, QObject *parent = nullptr);
     void run();
-    void endFile(QByteArray buffer);
-    void endUploadFile(QByteArray buffer);
+    void endFile();
+    void endUploadFile();
 
 signals:
 
@@ -26,12 +26,16 @@ private:
     QSqlDatabase DataBase;
     QTcpSocket* socket;
     int socketDescriptor;
-    QFile* uploadFile;
+    QFile uploadFile;
+    QByteArray buff;
 
     QString id;
     QString nameFile;
     QString lastIconName;
     bool isCanSendData = false;
+    QString sizeFile;
+    int currentSizeFile = 0;
+    QString typeFile;
 
 };
 

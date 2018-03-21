@@ -9,11 +9,11 @@ using namespace std;
 Widget::Widget(QObject* parent) : QObject(parent)
 {
     // подключение к бд
-    DataBase = QSqlDatabase::addDatabase("QMYSQL");
+    DataBase = QSqlDatabase::addDatabase("QMYSQL", "connection");
     DataBase.setHostName("localhost");
     DataBase.setDatabaseName("skype");
     DataBase.setUserName("root");
-    DataBase.setPassword("");
+    DataBase.setPassword("root");
 
     DataBase.open();
 
@@ -45,6 +45,7 @@ void Widget::newConnection()
 {
     SocketThread* systemSocket = new SocketThread(systemServer->nextPendingConnection()->socketDescriptor(),
                                             rooms, DataBase, socketClients);
+    connect(systemSocket, SIGNAL(restartDatabase()), this, SLOT(restartDatabase()));
     systemSocket->start();
     socketClients->append(systemSocket);
 }
@@ -60,4 +61,21 @@ void Widget::newConnectionUpdater()
 {
     Updater* updaterSocket = new Updater(updaterServer->nextPendingConnection()->socketDescriptor());
     updaterSocket->start();
+}
+
+QSqlDatabase Widget::restartDatabase()
+{
+    DataBase.close();
+    QSqlDatabase::removeDatabase("connection");
+
+    // подключение к бд
+    DataBase = QSqlDatabase::addDatabase("QMYSQL");
+    DataBase.setHostName("localhost");
+    DataBase.setDatabaseName("skype");
+    DataBase.setUserName("root");
+    DataBase.setPassword("root");
+
+    DataBase.open();
+
+    return DataBase;
 }

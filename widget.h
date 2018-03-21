@@ -22,6 +22,7 @@ private slots:
     void newConnection();
     void newConnectionTransferFile();
     void newConnectionUpdater();
+    QSqlDatabase restartDatabase();
 
 private:
     QSqlDatabase DataBase;

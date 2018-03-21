@@ -3,8 +3,9 @@
 #include "rooms.h"
 #include "room.h"
 #include "tcpsocket.h"
-#include <QFile>
 #include <QDate>
+#include <QFile>
+#include <QTimer>
 
 using namespace std;
 
@@ -12,7 +13,11 @@ SocketThread::SocketThread(int descriptor, Rooms* rooms, QSqlDatabase db, QList<
                            QObject * parent) :
     QThread(parent), SocketDescriptor(descriptor), AllRooms(rooms), DataBase(db), socketClients(Clients)
 {
-
+    QTimer *restartDatabaseTimer = new QTimer;
+    connect(restartDatabaseTimer, &QTimer::timeout, [this](){
+        slotRestartDatabase();
+    });
+    restartDatabaseTimer->start(30000);
 }
 
 SocketThread::~SocketThread()
@@ -33,6 +38,8 @@ void SocketThread::run()
 
 void SocketThread::Authentication(QString login, QString pass)
 {
+    slotRestartDatabase();
+
     // запрос на поиск логина в бд
     QSqlQuery query = QSqlQuery(DataBase);
     query.prepare("SELECT id, Login, Email, Phone, Name, Password, Status, IconName FROM users WHERE Login = :login");
@@ -71,6 +78,7 @@ void SocketThread::Authentication(QString login, QString pass)
             }
             else
             {
+                fakeUser = false;
                 loginUser = login;
 
                 // новый рандомный идентификатор
@@ -665,7 +673,7 @@ void SocketThread::OnReadyRead()
         query.bindValue(":idFirstFriends", id);
         query.bindValue(":idSecoundFriends", list[0]);
         query.bindValue(":message", list[1]);
-        query.bindValue(":time", date.toString("dd MMMM yyyy") + "!" + time.toString("hh:mm"));
+        query.bindValue(":time", date.toString("dd MM yyyy") + "!" + time.toString("hh:mm"));
         query.bindValue(":status", "1");
         query.exec();
 
@@ -712,12 +720,12 @@ void SocketThread::OnReadyRead()
             {
                 QMetaObject::invokeMethod(socketClients->at(i), "checkIdForSendMessage", Qt::AutoConnection,
                                       Q_ARG(QString, list[0]),
-                                      Q_ARG(QString, date.toString("dd MMMM yyyy")
+                                      Q_ARG(QString, date.toString("dd MM yyyy")
                                             + "!" + time.toString("hh:mm") + "!" + str + "!" + "1"),
                                       Q_ARG(QString, id + "!" + idMessage));
             }
         }
-        checkIdForSendMessage(id, date.toString("dd MMMM yyyy")
+        checkIdForSendMessage(id, date.toString("dd MM yyyy")
                          + "!" + time.toString("hh:mm") + "!" + str, id + "!" + idMessage);
     }
     else if(str.indexOf("/readUnreadMessages/") != -1)
@@ -1009,7 +1017,9 @@ void SocketThread::OnDisconnected()
     query.bindValue(":id", id);
     query.exec();
     Socket->close();
-    quit();
+    terminate();
+    wait();
+    deleteLater();
 }
 
 void SocketThread::SlotSendToClient(QString str)
@@ -1259,5 +1269,24 @@ void SocketThread::sendHistoryMessage(QString idFriend, QString i)
             message += messages[i] + "/!/";
         }
         SlotSendToClient(message);
+    }
+}
+
+void SocketThread::slotRestartDatabase()
+{
+    if(!DataBase.exec("SELECT TRUE").isActive())
+    {
+        DataBase = restartDatabase();
+        QFile file("restartDB.txt");
+        if(file.open(QIODevice::Append))
+        {
+            QDate date = QDate::currentDate();
+            QTime time = QTime::currentTime();
+
+            file.write(date.toString("dd MMMM yyyy").toLocal8Bit() + "  -   " +
+                       time.toString("hh:mm").toLocal8Bit());
+        }
+        file.close();
+        QThread::msleep(5000);
     }
 }

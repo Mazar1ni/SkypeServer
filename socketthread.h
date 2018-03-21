@@ -33,6 +33,9 @@ public:
 
     int numberDisplay = 0;
 
+private:
+    inline void slotRestartDatabase();
+
 private slots:
     void SlotSendToClient(QString str);
     void OnReadyRead();
@@ -46,6 +49,9 @@ private slots:
     void checkIdForAcceptInviteToFriend(QString testId, QString idFriend);
     void changeInfoAboutYourself(QString testId, QString idFriend, QString info);
     void sendFriendUpdateIcon(QString testId, QString idFriend, QString iconName);
+
+signals:
+    QSqlDatabase restartDatabase();
 
 private:
     int SocketDescriptor;

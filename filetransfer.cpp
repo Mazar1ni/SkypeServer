@@ -22,10 +22,9 @@ void FileTransfer::run()
     exec();
 }
 
-void FileTransfer::endFile(QByteArray buffer)
+void FileTransfer::endFile()
 {
-    uploadFile->write(buffer);
-    uploadFile->close();
+    uploadFile.close();
 
     QSqlQuery query = QSqlQuery(DataBase);
     query.prepare("SELECT IconName from users WHERE id = :id");
@@ -34,21 +33,17 @@ void FileTransfer::endFile(QByteArray buffer)
     query.next();
 
     lastIconName = query.value(0).toString();
-    QFile("clientsFiles/" + id + "/" + this->lastIconName).remove();
+    QFile("Z:/root/Release/clientsFiles/" + id + "/" + this->lastIconName).remove();
 
     query.prepare("UPDATE users SET IconName = :iconName WHERE id = :id");
     query.bindValue(":id", id);
     query.bindValue(":iconName", nameFile);
     query.exec();
-
-    uploadFile->deleteLater();
 }
 
-void FileTransfer::endUploadFile(QByteArray buffer)
+void FileTransfer::endUploadFile()
 {
-    uploadFile->write(buffer);
-    uploadFile->close();
-    uploadFile->deleteLater();
+    uploadFile.close();
 }
 
 void FileTransfer::onReadyRead()
@@ -84,17 +79,15 @@ void FileTransfer::onReadyRead()
     {
         str.remove("/informationFileIcon/");
 
-        nameFile = str;
+        QStringList list = str.split("~");
 
-        QDir("clientsFiles/").mkdir(id);
-        uploadFile = new QFile("clientsFiles/" + id + "/" + nameFile);
-        uploadFile->open(QFile::WriteOnly);
-    }
-    else if(buffer.indexOf("mainIconEndFile") != -1 && isCanSendData == true)
-    {
-        buffer.remove(buffer.size() - 16, 15);
-        endFile(buffer);
-        slotSendClient("/successTransferMainIcon/");
+        nameFile = list[0];
+        sizeFile = list[1];
+        typeFile = "mainIconEndFile";
+
+        QDir("Z:/root/Release/clientsFiles/").mkdir(id);
+        uploadFile.setFileName("Z:/root/Release/clientsFiles/" + id + "/" + nameFile);
+        uploadFile.open(QIODevice::WriteOnly | QIODevice::Unbuffered);
     }
     else if(str.indexOf("/informationFileAcquisitionIcon/") != -1 && isCanSendData == true)
     {
@@ -102,19 +95,28 @@ void FileTransfer::onReadyRead()
 
         QStringList list = str.split("!");
 
-        QFile file("clientsFiles/" + list[0] + "/" + list[1]);
-        file.open(QFile::ReadOnly);
+        QFile file("Z:/root/Release/clientsFiles/" + list[0] + "/" + list[1]);
+        file.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
         QByteArray dataFile = file.readAll();
 
-        socket->write(dataFile + "endFileIcon");
+        slotSendClient("/sizeFile/" + QString::number(dataFile.size()));
+        QThread::msleep(100);
+
+        socket->write(dataFile);
+        socket->flush();
     }
     else if(str.indexOf("/informationUploadFile/") != -1 && isCanSendData == true)
     {
         str.remove("/informationUploadFile/");
 
-        QDir("clientsFiles/").mkdir(id);
-        uploadFile = new QFile("clientsFiles/" + id + "/" + str);
-        uploadFile->open(QFile::WriteOnly);
+        QStringList list = str.split("~");
+
+        sizeFile = list[1];
+        typeFile = "uploadEndFile";
+
+        QDir("Z:/root/Release/clientsFiles/").mkdir(id);
+        uploadFile.setFileName("Z:/root/Release/clientsFiles/" + id + "/" + list[0]);
+        uploadFile.open(QIODevice::WriteOnly | QIODevice::Unbuffered);
     }
     else if(str.indexOf("/informationAcquisitionFile/") != -1 && isCanSendData == true)
     {
@@ -122,29 +124,43 @@ void FileTransfer::onReadyRead()
 
         QStringList list = str.split("!");
 
-        QFile file("clientsFiles/" + list[0] + "/" + list[1]);
-        file.open(QFile::ReadOnly);
+        QFile file("Z:/root/Release/clientsFiles/" + list[0] + "/" + list[1]);
+        file.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
         QByteArray dataFile = file.readAll();
 
-        socket->write(dataFile + "endFile");
-    }
-    else if(buffer.indexOf("uploadEndFile") != -1 && isCanSendData == true)
-    {
-        buffer.remove(buffer.size() - 14, 13);
-        endUploadFile(buffer);
-        slotSendClient("/successTransferFile/");
+        slotSendClient("/sizeFile/" + QString::number(dataFile.size()));
+        QThread::msleep(100);
+
+        socket->write(dataFile);
+        socket->flush();
     }
     else if(isCanSendData == true)
     {
-        uploadFile->write(buffer);
+        uploadFile.write(buffer);
+
+        currentSizeFile += buffer.size();
+
+        if(currentSizeFile == sizeFile.toInt())
+        {
+            if(typeFile == "mainIconEndFile")
+            {
+                endFile();
+                slotSendClient("/successTransferMainIcon/");
+            }
+            else if(typeFile == "uploadEndFile")
+            {
+                endUploadFile();
+                slotSendClient("/successTransferFile/");
+            }
+        }
     }
 }
 
 void FileTransfer::onDisconnected()
 {
-    qDebug() << "disconnect";
     socket->close();
-    quit();
+    terminate();
+    wait();
     deleteLater();
 }
 
@@ -156,4 +172,5 @@ void FileTransfer::slotSendClient(QString str)
     out << str;
 
     socket->write(arrBlock);
+    socket->flush();
 }

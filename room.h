@@ -10,18 +10,21 @@ class Rooms;
 
 class Room : public QObject
 {
+    Q_OBJECT
 public:
     Room(QString name, QString password, TcpSocket* socket, QSqlDatabase *db, Rooms* p);
 
     void GetRoom(TcpSocket *socket);
-    void SendAudioToAllClients(TcpSocket *SentAudio, QByteArray buffer);
     //void SendMessageToAllClients(TcpSocket *SentAudio, QString str);
     int countSocket();
-    void closeRoom(TcpSocket *SentAudio);
     void leaveTheRoom(TcpSocket *client);
 
     QString getName() const;
     QString getPassword() const;
+
+public slots:
+    void SendAudioToAllClients(TcpSocket *SentAudio, QByteArray buffer);
+    void closeRoom(TcpSocket *SentAudio);
 
 private:
     QString Name;

@@ -3,6 +3,7 @@
 #include "rooms.h"
 #include "room.h"
 #include "tcpsocket.h"
+#include "audioserver.h"
 #include <QDate>
 #include <QFile>
 #include <QTimer>
@@ -153,20 +154,24 @@ void SocketThread::Authentication(QString login, QString pass)
 
 void SocketThread::CreateRooms(QString name, QString pass)
 {
-    room = AllRooms->CreateRoom(name, pass, Socket, &DataBase);
+    room = AllRooms->CreateRoom(name, pass, socketAudio, &DataBase);
     if(room != nullptr)
     {
-        qDebug("CreateRoom");
+        connect(audioServer, SIGNAL(sendAudioToClients(TcpSocket*,QByteArray)),
+                room, SLOT(SendAudioToAllClients(TcpSocket*,QByteArray)));
+        newRoom(room);
     }
 }
 
 void SocketThread::GetInRoom(QString name, QString pass)
 {
     // проверка, добавился ли клент в указанную комнату
-    room = AllRooms->GetInRoom(name, pass, Socket);
+    room = AllRooms->GetInRoom(name, pass, socketAudio);
     if(room != nullptr)
     {
-        qDebug("getinroom");
+        connect(audioServer, SIGNAL(sendAudioToClients(TcpSocket*,QByteArray)),
+                room, SLOT(SendAudioToAllClients(TcpSocket*, QByteArray)));
+        newRoom(room);
         SlotSendToClient("/9/");
     }
 }
@@ -332,6 +337,17 @@ void SocketThread::sendFriendUpdateIcon(QString testId, QString idFriend, QStrin
     }
 }
 
+void SocketThread::checkIdForAudioServer(QString testId, AudioServer *audio, TcpSocket *socket)
+{
+    if(id == testId)
+    {
+        audioServer = audio;
+        socketAudio = socket;
+
+        connect(this, SIGNAL(newRoom(Room*)), audioServer, SLOT(newRoom(Room*)));
+    }
+}
+
 void SocketThread::OnReadyRead()
 {
     QByteArray buffer;
@@ -342,12 +358,7 @@ void SocketThread::OnReadyRead()
     QString str;
     in >> str;
 
-    // отправка всем пользователям комнаты аудио
-    if(buffer.indexOf("/18/") != -1)
-    {
-        room->SendAudioToAllClients(Socket, buffer);
-    }
-    else if(buffer.indexOf("/camera/") != -1 || buffer.indexOf("/end/") != -1)
+    if(buffer.indexOf("/camera/") != -1 || buffer.indexOf("/end/") != -1)
     {
         room->SendAudioToAllClients(Socket, buffer);
     }
@@ -679,40 +690,38 @@ void SocketThread::OnReadyRead()
 
         QString idMessage = query.lastInsertId().toString();
 
-        {
-            query.prepare("SELECT idFirstFriends, idSecoundFriends, "
-                          "unreadMessageFirstFriend, unreadMessageSecoundFriend "
-                          "FROM friends "
-                          "WHERE (idFirstFriends = :firstFriend "
-                          "AND idSecoundFriends = :first) "
-                          "OR (idFirstFriends = :first "
-                          "AND idSecoundFriends = :firstFriend)");
-            query.bindValue(":firstFriend", list[0]);
-            query.bindValue(":first", id);
-            query.exec();
+        query.prepare("SELECT idFirstFriends, idSecoundFriends, "
+                      "unreadMessageFirstFriend, unreadMessageSecoundFriend "
+                      "FROM friends "
+                      "WHERE (idFirstFriends = :firstFriend "
+                      "AND idSecoundFriends = :first) "
+                      "OR (idFirstFriends = :first "
+                      "AND idSecoundFriends = :firstFriend)");
+        query.bindValue(":firstFriend", list[0]);
+        query.bindValue(":first", id);
+        query.exec();
 
-            int firstUnread;
-            int secoundUnread;
+        int firstUnread;
+        int secoundUnread;
 
-            query.next();
+        query.next();
 
-            firstUnread = query.value(2).toInt();
-            secoundUnread = query.value(3).toInt();
+        firstUnread = query.value(2).toInt();
+        secoundUnread = query.value(3).toInt();
 
-            query.value(0).toString() == list[0] ? firstUnread++ : secoundUnread++;
+        query.value(0).toString() == list[0] ? firstUnread++ : secoundUnread++;
 
-            query.prepare("UPDATE friends SET unreadMessageFirstFriend = :firstUnread, "
-                          "unreadMessageSecoundFriend = :secoundUnread "
-                          "WHERE (idFirstFriends = :firstFriend "
-                          "AND idSecoundFriends = :first) "
-                          "OR (idFirstFriends = :first "
-                          "AND idSecoundFriends = :firstFriend)");
-            query.bindValue(":firstUnread", firstUnread);
-            query.bindValue(":secoundUnread", secoundUnread);
-            query.bindValue(":firstFriend", list[0]);
-            query.bindValue(":first", id);
-            query.exec();
-        }
+        query.prepare("UPDATE friends SET unreadMessageFirstFriend = :firstUnread, "
+                      "unreadMessageSecoundFriend = :secoundUnread "
+                      "WHERE (idFirstFriends = :firstFriend "
+                      "AND idSecoundFriends = :first) "
+                      "OR (idFirstFriends = :first "
+                      "AND idSecoundFriends = :firstFriend)");
+        query.bindValue(":firstUnread", firstUnread);
+        query.bindValue(":secoundUnread", secoundUnread);
+        query.bindValue(":firstFriend", list[0]);
+        query.bindValue(":first", id);
+        query.exec();
 
         for(int i = 0; i < socketClients->size(); i++)
         {
@@ -794,7 +803,9 @@ void SocketThread::OnReadyRead()
     // проверка, относится ли этот текст к концу звонка
     else if(str.indexOf("/endCall/") != -1)
     {
-        room->closeRoom(Socket);
+//        QMetaObject::invokeMethod(room, "closeRoom", Qt::DirectConnection,
+//                              Q_ARG(TcpSocket*, socketAudio));
+        room->closeRoom(socketAudio);
     }
     else if(str.indexOf("/endingCall/") != -1)
     {
@@ -1211,13 +1222,13 @@ void SocketThread::gettingInviteFriends()
 
 void SocketThread::closeRoomFriendHangUp(QString name)
 {
-    AllRooms->closeRoomFriendHangUp(name, Socket);
+    AllRooms->closeRoomFriendHangUp(name, socketAudio);
 }
 
 void SocketThread::sendHistoryMessage(QString idFriend, QString i)
 {
-    int limit = 20 * i.toInt();
-    int offset = 20 * (i.toInt() - 1);
+    int limit = 10 * i.toInt();
+    int offset = 10 * (i.toInt() - 1);
 
     QSqlQuery query = QSqlQuery(DataBase);
     query.prepare("SELECT idFirstFriends, idSecoundFriends, message, time, id, status FROM messages "
@@ -1254,8 +1265,6 @@ void SocketThread::sendHistoryMessage(QString idFriend, QString i)
     {
         for(int i = messages.size() - 1; i >= 0; i--)
         {
-            //SlotSendToClient(messages[i]);
-            //QThread::msleep(15);
             message += messages[i] + "/!/";
         }
         SlotSendToClient(message);
@@ -1264,8 +1273,6 @@ void SocketThread::sendHistoryMessage(QString idFriend, QString i)
     {
         for(int i = 0; i <= messages.size() - 1; i++)
         {
-            //SlotSendToClient(messages[i]);
-            //QThread::msleep(15);
             message += messages[i] + "/!/";
         }
         SlotSendToClient(message);
@@ -1284,7 +1291,8 @@ void SocketThread::slotRestartDatabase()
             QTime time = QTime::currentTime();
 
             file.write(date.toString("dd MMMM yyyy").toLocal8Bit() + "  -   " +
-                       time.toString("hh:mm").toLocal8Bit());
+                       time.toString("hh:mm").toLocal8Bit() +
+                       QString::number(DataBase.exec("SELECT TRUE").isActive()).toLocal8Bit() + "/n");
         }
         file.close();
         QThread::msleep(5000);

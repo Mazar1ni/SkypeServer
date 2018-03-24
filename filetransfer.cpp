@@ -72,6 +72,7 @@ void FileTransfer::onReadyRead()
         if(!query.next())
         {
             slotSendClient("/invalidData/");
+            return;
         }
         isCanSendData = true;
     }

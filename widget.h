@@ -22,6 +22,7 @@ private slots:
     void newConnection();
     void newConnectionTransferFile();
     void newConnectionUpdater();
+    void newConnectionAudio();
     QSqlDatabase restartDatabase();
 
 private:
@@ -31,6 +32,7 @@ private:
     QTcpServer* systemServer;
     QTcpServer* fileTransferServer;
     QTcpServer* updaterServer;
+    QTcpServer* audioServer;
     QThread thread;
 };
 

@@ -3,6 +3,7 @@
 #include "rooms.h"
 #include "filetransfer.h"
 #include "updater.h"
+#include "audioserver.h"
 
 using namespace std;
 
@@ -32,6 +33,10 @@ Widget::Widget(QObject* parent) : QObject(parent)
     updaterServer = new QTcpServer();
     updaterServer->listen(QHostAddress::Any, 7072);
     connect(updaterServer, SIGNAL(newConnection()), this, SLOT(newConnectionUpdater()));
+
+    audioServer = new QTcpServer();
+    audioServer->listen(QHostAddress::Any, 7073);
+    connect(audioServer, SIGNAL(newConnection()), this, SLOT(newConnectionAudio()));
 }
 
 Widget::~Widget()
@@ -63,13 +68,20 @@ void Widget::newConnectionUpdater()
     updaterSocket->start();
 }
 
+void Widget::newConnectionAudio()
+{
+    AudioServer* audioSocket = new AudioServer(audioServer->nextPendingConnection()->socketDescriptor(),
+                                               DataBase, socketClients);
+    audioSocket->start();
+}
+
 QSqlDatabase Widget::restartDatabase()
 {
     DataBase.close();
     QSqlDatabase::removeDatabase("connection");
 
     // подключение к бд
-    DataBase = QSqlDatabase::addDatabase("QMYSQL");
+    DataBase = QSqlDatabase::addDatabase("QMYSQL", "connection");
     DataBase.setHostName("localhost");
     DataBase.setDatabaseName("skype");
     DataBase.setUserName("root");

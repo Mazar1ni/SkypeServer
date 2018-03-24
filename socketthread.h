@@ -12,6 +12,7 @@ class Rooms;
 class Room;
 class Server;
 class TcpSocket;
+class AudioServer;
 
 class SocketThread : public QThread
 {
@@ -32,9 +33,13 @@ public:
     void sendHistoryMessage(QString idFriend, QString i);
 
     int numberDisplay = 0;
+    QString id;
 
 private:
     inline void slotRestartDatabase();
+
+public slots:
+    void checkIdForAudioServer(QString testId, AudioServer* audio, TcpSocket* socket);
 
 private slots:
     void SlotSendToClient(QString str);
@@ -52,6 +57,7 @@ private slots:
 
 signals:
     QSqlDatabase restartDatabase();
+    void newRoom(Room*);
 
 private:
     int SocketDescriptor;
@@ -60,9 +66,10 @@ private:
     Room* room = nullptr;
     TcpSocket* Socket;
     QString loginUser;
-    QString id;
     QList<SocketThread*>* socketClients;
     bool fakeUser = false;
+    AudioServer* audioServer;
+    TcpSocket* socketAudio;
 
 };
 

@@ -49,9 +49,9 @@ void Room::closeRoom(TcpSocket *SentAudio)
     {
         if(sock != SentAudio)
         {
-            QString message = "/outoftheroom/";
-            QMetaObject::invokeMethod(sock, "onWrite", Qt::AutoConnection,
-                                      Q_ARG(QByteArray, message.toUtf8()));
+//            QString message = "/outoftheroom/";
+//            QMetaObject::invokeMethod(sock, "onWrite", Qt::AutoConnection,
+//                                      Q_ARG(QByteArray, message.toUtf8()));
             leaveTheRoom(sock);
         }
     }

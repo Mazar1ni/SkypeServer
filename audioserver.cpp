@@ -2,7 +2,6 @@
 #include <QSqlQuery>
 #include <QDataStream>
 #include "socketthread.h"
-#include "room.h"
 #include "tcpsocket.h"
 
 AudioServer::AudioServer(int descriptor, QSqlDatabase db, QList<SocketThread*>* socClients, QObject *parent)
@@ -33,11 +32,6 @@ void AudioServer::slotSendClient(QString str)
     socket->flush();
 }
 
-void AudioServer::newRoom(Room *r)
-{
-    room = r;
-}
-
 void AudioServer::onReadyRead()
 {
     QByteArray buffer;
@@ -48,7 +42,11 @@ void AudioServer::onReadyRead()
     QString str;
     in >> str;
 
-    if(str.indexOf("/connect/") != -1)
+    if(buffer.indexOf("/18/") != -1)
+    {
+        sendAudioToClients(socket, buffer);
+    }
+    else if(str.indexOf("/connect/") != -1)
     {
         str.remove("/connect/");
         QStringList list = str.split("!");
@@ -72,10 +70,6 @@ void AudioServer::onReadyRead()
             }
             slotSendClient("/connected/");
         }
-    }
-    else if(buffer.indexOf("/18/") != -1)
-    {
-        sendAudioToClients(socket, buffer);
     }
 }
 

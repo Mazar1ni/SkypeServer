@@ -159,7 +159,6 @@ void SocketThread::CreateRooms(QString name, QString pass)
     {
         connect(audioServer, SIGNAL(sendAudioToClients(TcpSocket*,QByteArray)),
                 room, SLOT(SendAudioToAllClients(TcpSocket*,QByteArray)));
-        newRoom(room);
     }
 }
 
@@ -171,7 +170,6 @@ void SocketThread::GetInRoom(QString name, QString pass)
     {
         connect(audioServer, SIGNAL(sendAudioToClients(TcpSocket*,QByteArray)),
                 room, SLOT(SendAudioToAllClients(TcpSocket*, QByteArray)));
-        newRoom(room);
         SlotSendToClient("/9/");
     }
 }
@@ -343,8 +341,6 @@ void SocketThread::checkIdForAudioServer(QString testId, AudioServer *audio, Tcp
     {
         audioServer = audio;
         socketAudio = socket;
-
-        connect(this, SIGNAL(newRoom(Room*)), audioServer, SLOT(newRoom(Room*)));
     }
 }
 
@@ -503,10 +499,10 @@ void SocketThread::OnReadyRead()
         {
             if(socketClients->at(i) != this)
             {
-                CreateRooms(loginUser + "-" + str, "123");
+                CreateRooms(loginUser + QDate::currentDate().toString("dd MM yyyy") + "-" + str, "123");
                 QMetaObject::invokeMethod(socketClients->at(i), "checkId", Qt::AutoConnection,
                                           Q_ARG(QString, str),
-                                          Q_ARG(QString, loginUser + "-" + str),
+                                          Q_ARG(QString, loginUser + QDate::currentDate().toString("dd MM yyyy") + "-" + str),
                                           Q_ARG(QString, "123"));
             }
         }
@@ -1227,7 +1223,6 @@ void SocketThread::closeRoomFriendHangUp(QString name)
 
 void SocketThread::sendHistoryMessage(QString idFriend, QString i)
 {
-    int limit = 10 * i.toInt();
     int offset = 10 * (i.toInt() - 1);
 
     QSqlQuery query = QSqlQuery(DataBase);
@@ -1235,10 +1230,9 @@ void SocketThread::sendHistoryMessage(QString idFriend, QString i)
                   "WHERE (idFirstFriends = :firstFriend "
                   "AND idSecoundFriends = :first) "
                   "OR (idFirstFriends = :first "
-                  "AND idSecoundFriends = :firstFriend) ORDER BY id DESC LIMIT :limit OFFSET :offset");
+                  "AND idSecoundFriends = :firstFriend) ORDER BY id DESC LIMIT 10 OFFSET :offset");
     query.bindValue(":firstFriend", idFriend);
     query.bindValue(":first", id);
-    query.bindValue(":limit", limit);
     query.bindValue(":offset", offset);
     query.exec();
 

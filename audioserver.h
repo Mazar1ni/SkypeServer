@@ -6,7 +6,6 @@
 #include <QSqlDatabase>
 
 class SocketThread;
-class Room;
 class TcpSocket;
 
 class AudioServer : public QThread
@@ -20,9 +19,6 @@ public:
 signals:
     void sendAudioToClients(TcpSocket *SentAudio, QByteArray buffer);
 
-public slots:
-    void newRoom(Room* r);
-
 private slots:
     void onReadyRead();
     void onDisconnected();
@@ -33,7 +29,6 @@ private:
     TcpSocket* socket;
     QString id;
     QList<SocketThread*>* socketClients;
-    Room* room = nullptr;
 
 };
 

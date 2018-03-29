@@ -57,7 +57,6 @@ private slots:
 
 signals:
     QSqlDatabase restartDatabase();
-    void newRoom(Room*);
 
 private:
     int SocketDescriptor;

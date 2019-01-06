@@ -8,16 +8,23 @@
 class TcpSocket;
 class Rooms;
 
+struct Client
+{
+    QString ip;
+    QString port;
+};
+
 class Room : public QObject
 {
     Q_OBJECT
 public:
-    Room(QString name, QString password, TcpSocket* socket, QSqlDatabase *db, Rooms* p);
+    Room(QString name, QString password, TcpSocket* socket, QSqlDatabase *db, Rooms* p, QString ip, QString port);
 
-    void GetRoom(TcpSocket *socket);
+    void GetRoom(TcpSocket *socket, QString ip, QString port);
     //void SendMessageToAllClients(TcpSocket *SentAudio, QString str);
     int countSocket();
     void leaveTheRoom(TcpSocket *client);
+    void sendIpPortAllClients(TcpSocket* sender, QString ip, QString port);
 
     QString getName() const;
     QString getPassword() const;
@@ -32,6 +39,8 @@ private:
     QList<TcpSocket*> Clients;
     QSqlDatabase *dataBase;
     Rooms* parent;
+
+    QList<Client> clientsData;
 
 };
 

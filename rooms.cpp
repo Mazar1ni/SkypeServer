@@ -7,19 +7,19 @@ Rooms::Rooms()
 
 }
 
-Room* Rooms::CreateRoom(QString name, QString pass, TcpSocket *socket, QSqlDatabase* db)
+Room* Rooms::CreateRoom(QString name, QString pass, TcpSocket *socket, QSqlDatabase* db, QString ip, QString port)
 {
-    rooms.append(new Room(name, pass, socket, db, this));
+    rooms.append(new Room(name, pass, socket, db, this, ip, port));
     return rooms.at(rooms.length() - 1);
 }
 
-Room* Rooms::GetInRoom(QString name, QString pass, TcpSocket *socket)
+Room* Rooms::GetInRoom(QString name, QString pass, TcpSocket *socket, QString ip, QString port)
 {
     for(int i = 0; i < rooms.count(); i++)
     {
         if(rooms[i]->getName() == name && rooms[i]->getPassword() == pass)
         {
-            rooms[i]->GetRoom(socket);
+            rooms[i]->GetRoom(socket, ip, port);
             return rooms[i];
         }
     }

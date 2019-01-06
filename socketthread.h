@@ -38,9 +38,6 @@ public:
 private:
     inline void slotRestartDatabase();
 
-public slots:
-    void checkIdForAudioServer(QString testId, AudioServer* audio, TcpSocket* socket);
-
 private slots:
     void SlotSendToClient(QString str);
     void OnReadyRead();
@@ -67,9 +64,9 @@ private:
     QString loginUser;
     QList<SocketThread*>* socketClients;
     bool fakeUser = false;
-    AudioServer* audioServer;
-    TcpSocket* socketAudio;
 
+    QString ip;
+    QString port;
 };
 
 #endif // SOCKETTHREAD_H

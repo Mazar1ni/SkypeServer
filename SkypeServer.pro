@@ -64,7 +64,7 @@ SOURCES += \
     tcpsocket.cpp \
     filetransfer.cpp \
     updater.cpp \
-    audioserver.cpp
+    stunserver.cpp
 
 HEADERS += \
         widget.h \
@@ -74,7 +74,7 @@ HEADERS += \
     tcpsocket.h \
     filetransfer.h \
     updater.h \
-    audioserver.h
+    stunserver.h
 
 SUBDIRS += \
     SkypeServer.pro

@@ -5,10 +5,12 @@
 #include <QSqlDatabase>
 #include <QTcpServer>
 #include <QThread>
+#include <QUdpSocket>
 
 class Rooms;
 class SocketThread;
 class FileTrnsfer;
+class StunServer;
 
 class Widget : public QObject
 {
@@ -22,7 +24,6 @@ private slots:
     void newConnection();
     void newConnectionTransferFile();
     void newConnectionUpdater();
-    void newConnectionAudio();
     QSqlDatabase restartDatabase();
 
 private:
@@ -32,8 +33,11 @@ private:
     QTcpServer* systemServer;
     QTcpServer* fileTransferServer;
     QTcpServer* updaterServer;
-    QTcpServer* audioServer;
     QThread thread;
+
+    StunServer* stunServer;
+
+    QUdpSocket* socket;
 };
 
 #endif // WIDGET_H

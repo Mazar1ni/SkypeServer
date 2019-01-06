@@ -3,7 +3,7 @@
 #include "rooms.h"
 #include "room.h"
 #include "tcpsocket.h"
-#include "audioserver.h"
+#include "stunserver.h"
 #include <QDate>
 #include <QFile>
 #include <QTimer>
@@ -154,22 +154,19 @@ void SocketThread::Authentication(QString login, QString pass)
 
 void SocketThread::CreateRooms(QString name, QString pass)
 {
-    room = AllRooms->CreateRoom(name, pass, socketAudio, &DataBase);
+    room = AllRooms->CreateRoom(name, pass, Socket, &DataBase, ip, port);
     if(room != nullptr)
     {
-        connect(audioServer, SIGNAL(sendAudioToClients(TcpSocket*,QByteArray)),
-                room, SLOT(SendAudioToAllClients(TcpSocket*,QByteArray)));
+
     }
 }
 
 void SocketThread::GetInRoom(QString name, QString pass)
 {
     // проверка, добавился ли клент в указанную комнату
-    room = AllRooms->GetInRoom(name, pass, socketAudio);
+    room = AllRooms->GetInRoom(name, pass, Socket, ip, port);
     if(room != nullptr)
     {
-        connect(audioServer, SIGNAL(sendAudioToClients(TcpSocket*,QByteArray)),
-                room, SLOT(SendAudioToAllClients(TcpSocket*, QByteArray)));
         SlotSendToClient("/9/");
     }
 }
@@ -335,15 +332,6 @@ void SocketThread::sendFriendUpdateIcon(QString testId, QString idFriend, QStrin
     }
 }
 
-void SocketThread::checkIdForAudioServer(QString testId, AudioServer *audio, TcpSocket *socket)
-{
-    if(id == testId)
-    {
-        audioServer = audio;
-        socketAudio = socket;
-    }
-}
-
 void SocketThread::OnReadyRead()
 {
     QByteArray buffer;
@@ -499,10 +487,11 @@ void SocketThread::OnReadyRead()
         {
             if(socketClients->at(i) != this)
             {
-                CreateRooms(loginUser + QDate::currentDate().toString("dd MM yyyy") + "-" + str, "123");
+                QString nameRoom = loginUser + "~" + qrand() + "-" + str;
+                CreateRooms(nameRoom, "123");
                 QMetaObject::invokeMethod(socketClients->at(i), "checkId", Qt::AutoConnection,
                                           Q_ARG(QString, str),
-                                          Q_ARG(QString, loginUser + QDate::currentDate().toString("dd MM yyyy") + "-" + str),
+                                          Q_ARG(QString, nameRoom),
                                           Q_ARG(QString, "123"));
             }
         }
@@ -801,7 +790,7 @@ void SocketThread::OnReadyRead()
     {
 //        QMetaObject::invokeMethod(room, "closeRoom", Qt::DirectConnection,
 //                              Q_ARG(TcpSocket*, socketAudio));
-        room->closeRoom(socketAudio);
+        room->closeRoom(Socket);
     }
     else if(str.indexOf("/endingCall/") != -1)
     {
@@ -973,6 +962,17 @@ void SocketThread::OnReadyRead()
         }
 
         SlotSendToClient("/updateMainIcon/" + iconName);
+    }
+    else if(str.indexOf("/IpPort/") != -1)
+    {
+        str.remove("/IpPort/");
+
+        QStringList list = str.split("!");
+
+        ip = list[0];
+        port = list[1];
+
+        SlotSendToClient("/ConnectedAudio/");
     }
     else
     {
@@ -1218,7 +1218,7 @@ void SocketThread::gettingInviteFriends()
 
 void SocketThread::closeRoomFriendHangUp(QString name)
 {
-    AllRooms->closeRoomFriendHangUp(name, socketAudio);
+    AllRooms->closeRoomFriendHangUp(name, Socket);
 }
 
 void SocketThread::sendHistoryMessage(QString idFriend, QString i)

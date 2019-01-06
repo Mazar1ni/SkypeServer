@@ -14,8 +14,8 @@ class Rooms
 public:
     Rooms();
 
-    Room *CreateRoom(QString name, QString pass, TcpSocket *socket, QSqlDatabase *db);
-    Room *GetInRoom(QString name, QString pass, TcpSocket *socket);
+    Room *CreateRoom(QString name, QString pass, TcpSocket *socket, QSqlDatabase *db, QString ip, QString port);
+    Room *GetInRoom(QString name, QString pass, TcpSocket *socket, QString ip, QString port);
     void closeRoomFriendHangUp(QString name, TcpSocket *SentAudio);
     void removeRoom(Room *room);
 

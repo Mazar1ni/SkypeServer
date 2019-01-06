@@ -3,7 +3,7 @@
 #include "rooms.h"
 #include "filetransfer.h"
 #include "updater.h"
-#include "audioserver.h"
+#include "stunserver.h"
 
 using namespace std;
 
@@ -17,6 +17,10 @@ Widget::Widget(QObject* parent) : QObject(parent)
     DataBase.setPassword("root");
 
     DataBase.open();
+
+    QSqlQuery query = QSqlQuery(DataBase);
+    query.prepare("UPDATE users SET status = '0'");
+    query.exec();
 
     socketClients = new QList<SocketThread*>;
 
@@ -34,9 +38,8 @@ Widget::Widget(QObject* parent) : QObject(parent)
     updaterServer->listen(QHostAddress::Any, 7072);
     connect(updaterServer, SIGNAL(newConnection()), this, SLOT(newConnectionUpdater()));
 
-    audioServer = new QTcpServer();
-    audioServer->listen(QHostAddress::Any, 7073);
-    connect(audioServer, SIGNAL(newConnection()), this, SLOT(newConnectionAudio()));
+    stunServer = new StunServer;
+    stunServer->start();
 }
 
 Widget::~Widget()
@@ -66,13 +69,6 @@ void Widget::newConnectionUpdater()
 {
     Updater* updaterSocket = new Updater(updaterServer->nextPendingConnection()->socketDescriptor());
     updaterSocket->start();
-}
-
-void Widget::newConnectionAudio()
-{
-    AudioServer* audioSocket = new AudioServer(audioServer->nextPendingConnection()->socketDescriptor(),
-                                               DataBase, socketClients);
-    audioSocket->start();
 }
 
 QSqlDatabase Widget::restartDatabase()
